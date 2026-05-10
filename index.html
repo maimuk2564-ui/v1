@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sericulture Smart Dashboard</title>
+    
+    <!-- React & Libraries -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Recharts Dependencies -->
+    <script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Fonts & CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Sarabun', 'sans-serif'] },
+                    animation: {
+                        'fade-in': 'fadeIn 0.4s ease-out',
+                        'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'fade-in-up': 'fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+                        fadeInUp: { '0%': { transform: 'translateY(30px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-8px)' } },
+                    }
+                },
+            },
+        }
+    </script>
+    
+    <style>
+        /* --- iOS Glassmorphism Base --- */
+        body { 
+            font-family: 'Sarabun', sans-serif !important; 
+            color: #334155; 
+            background-color: #fdfbfb;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(238, 242, 255, 1) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(233, 213, 255, 0.7) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(204, 251, 241, 0.7) 0px, transparent 50%),
+                radial-gradient(at 0% 100%, rgba(254, 226, 226, 0.7) 0px, transparent 50%);
+            background-attachment: fixed;
+            background-size: cover;
+            min-height: 100vh;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line { stroke: rgba(226, 232, 240, 0.6); } 
+        .recharts-text.recharts-cartesian-axis-tick-value { font-family: 'Sarabun', sans-serif !important; fill: #64748b !important; font-weight: 600;} 
+        
+        /* --- Glass Panels --- */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .glass-panel-hover { transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .glass-panel-hover:hover { background: rgba(255, 255, 255, 0.8); box-shadow: 0 15px 40px -5px rgba(0, 0, 0, 0.08); transform: translateY(-2px); }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .glass-input:focus { background: rgba(255, 255, 255, 0.95); border-color: #818cf8; }
+
+        /* Recharts Glass Tooltip */
+        .recharts-default-tooltip {
+            background: rgba(255, 255, 255, 0.85) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.9) !important;
+            border-radius: 1.5rem !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+            padding: 1.5rem !important;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, Area } = window.Recharts || {};
+
+        // --- Icons ---
+        const IconBase = ({ children, size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const Leaf = (props) => <IconBase {...props}><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></IconBase>;
+        const Activity = (props) => <IconBase {...props}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></IconBase>;
+        const Users = (props) => <IconBase {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>;
+        const TrendingUp = (props) => <IconBase {...props}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></IconBase>;
+        const TrendingDown = (props) => <IconBase {...props}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></IconBase>;
+        const Star = (props) => <IconBase {...props} fill={props.fill || "none"}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></IconBase>;
+        const Award = (props) => <IconBase {...props}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></IconBase>;
+        const X = (props) => <IconBase {...props}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>;
+        const DollarSign = (props) => <IconBase {...props}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></IconBase>;
+        const Package = (props) => <IconBase {...props}><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></IconBase>;
+        const GaugeIcon = (props) => <IconBase {...props}><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/><path d="M12 2v3"/><path d="M19.07 4.93l-2.12 2.12"/><path d="M22 12h-3"/><path d="M4.93 4.93l2.12 2.12"/><path d="M2 12h3"/></IconBase>;
+        const AlertCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconBase>;
+        const Search = (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconBase>;
+        const CheckCircle = (props) => <IconBase {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>;
+        const Layers = (props) => <IconBase {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></IconBase>;
+        const InfoIcon = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></IconBase>;
+
+        // --- Constants ---
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRLiB_ZNSItsPEkzklbIya1kJC3NtEp4xLRlFeOFVPhmMBsRruC48ZNkAYc2TqjHQQFG5X36bZ2tzzG/pub?output=csv';
+        const MONTH_MAP = {
+            'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4, 'พฤษภาคม': 5, 'มิถุนายน': 6,
+            'กรกฎาคม': 7, 'สิงหาคม': 8, 'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+        };
+
+        const sortMonths = (monthsSet) => {
+            return Array.from(monthsSet).sort((a, b) => (MONTH_MAP[a] || 0) - (MONTH_MAP[b] || 0));
+        };
+
+        const cleanNumber = (str) => { if (!str) return 0; if (typeof str === 'number') return str; return parseFloat(str.replace(/,/g, '')) || 0; };
+
+        // === ตรรกะตัดเกรดแบบรายแผ่นตามเงื่อนไขใหม่ ===
+        const calculateGrade = (incomePerSheet) => {
+            if (incomePerSheet >= 5000) return { grade: 'A', color: '#10b981', textColor: 'text-emerald-600', bg: 'bg-emerald-50/50', border: 'border-emerald-200', label: 'เกรด A', desc: '(ดีเยี่ยม)', range: `>= 5,000 บ.` };
+            if (incomePerSheet >= 4000) return { grade: 'B', color: '#3b82f6', textColor: 'text-sky-600', bg: 'bg-sky-50/50', border: 'border-sky-200', label: 'เกรด B', desc: '(ดี)', range: `4,000-4,999 บ.` };
+            if (incomePerSheet >= 3000) return { grade: 'C', color: '#f59e0b', textColor: 'text-amber-600', bg: 'bg-amber-50/50', border: 'border-amber-200', label: 'เกรด C', desc: '(ปานกลาง)', range: `3,000-3,999 บ.` };
+            return { grade: 'D', color: '#ef4444', textColor: 'text-rose-600', bg: 'bg-rose-50/50', border: 'border-rose-200', label: 'เกรด D', desc: '(ปรับปรุง)', range: `500-2,999 บ.` };
+        };
+
+        // --- Sub-Components ---
+        const ExecutiveSummary = ({ data, stats, aggregatedFarmers }) => {
+            if (!data || data.length === 0) return null;
+            
+            const gradeA = aggregatedFarmers.filter(f => f.finalGrade === 'A').length;
+            const pctA = aggregatedFarmers.length > 0 ? ((gradeA / aggregatedFarmers.length) * 100).toFixed(1) : 0;
+            
+            const farmerIncomes = aggregatedFarmers.map(f => f.totalIncome);
+            const maxIncome = farmerIncomes.length > 0 ? Math.max(...farmerIncomes) : 0;
+            const minIncome = farmerIncomes.length > 0 ? Math.min(...farmerIncomes) : 0;
+            const avgIncomePerFarmer = farmerIncomes.length > 0 ? stats.totalIncome / farmerIncomes.length : 0;
+            
+            return (
+                <div className="glass-panel p-8 rounded-[2.5rem] mb-12 flex flex-col lg:flex-row gap-8 items-center animate-fade-in-up shadow-[0_10px_30px_rgba(0,0,0,0.03)]">
+                    <div className="bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-600 text-white p-6 rounded-[2rem] shrink-0 shadow-[0_15px_30px_rgba(99,102,241,0.3)] animate-float">
+                        <Activity size={44} strokeWidth={2} />
+                    </div>
+                    <div className="flex-grow w-full">
+                        <h3 className="text-xl font-extrabold text-slate-800 mb-4 tracking-tight drop-shadow-sm flex items-center gap-2">
+                            💡 สรุปข้อมูลสำหรับผู้บริหาร <span className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] font-normal">(Executive Insights)</span>
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                            <div className="bg-white/60 p-5 rounded-2xl border border-white shadow-sm flex flex-col justify-center transition-all hover:bg-white/80">
+                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><DollarSign size={12}/> รายได้หมุนเวียนรวม</span>
+                                <span className="text-2xl font-black text-indigo-600 tracking-tight">{stats.totalIncome.toLocaleString()} <span className="text-xs text-slate-500 font-bold">บาท</span></span>
+                            </div>
+                            <div className="bg-white/60 p-5 rounded-2xl border border-white shadow-sm flex flex-col justify-center transition-all hover:bg-white/80">
+                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Award size={12}/> ยอดผู้ผ่านเกณฑ์ A</span>
+                                <span className="text-2xl font-black text-emerald-600 tracking-tight">{gradeA} <span className="text-xs text-slate-500 font-bold">ราย ({pctA}%)</span></span>
+                            </div>
+                            <div className="bg-white/60 p-5 rounded-2xl border border-white shadow-sm flex flex-col justify-center transition-all hover:bg-white/80">
+                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-400"></div> เฉลี่ยรังขาว</span>
+                                <span className="text-2xl font-black text-slate-700 tracking-tight">{Math.round(stats.whiteAvgYield).toLocaleString()} <span className="text-xs text-slate-500 font-bold">บ./แผ่น</span></span>
+                            </div>
+                            <div className="bg-white/60 p-5 rounded-2xl border border-white shadow-sm flex flex-col justify-center transition-all hover:bg-white/80">
+                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-400"></div> เฉลี่ยรังเหลือง</span>
+                                <span className="text-2xl font-black text-amber-500 tracking-tight">{Math.round(stats.yellowAvgYield).toLocaleString()} <span className="text-xs text-slate-500 font-bold">บ./แผ่น</span></span>
+                            </div>
+                        </div>
+
+                        {/* === แถวที่ 2: สถิติรายได้รายบุคคล === */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5 border-t border-slate-200/60">
+                            <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 shadow-sm flex flex-col justify-center transition-all hover:bg-indigo-50">
+                                <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Users size={12}/> รายได้เฉลี่ยต่อคน</span>
+                                <span className="text-xl font-black text-indigo-600 tracking-tight">{Math.round(avgIncomePerFarmer).toLocaleString()} <span className="text-xs text-indigo-400 font-bold">บาท</span></span>
+                            </div>
+                            <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50 shadow-sm flex flex-col justify-center transition-all hover:bg-emerald-50">
+                                <span className="block text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><TrendingUp size={12}/> รายได้สูงสุด (Top)</span>
+                                <span className="text-xl font-black text-emerald-600 tracking-tight">{maxIncome.toLocaleString()} <span className="text-xs text-emerald-500 font-bold">บาท</span></span>
+                            </div>
+                            <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100/50 shadow-sm flex flex-col justify-center transition-all hover:bg-rose-50">
+                                <span className="block text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><TrendingDown size={12}/> รายได้ต่ำสุด</span>
+                                <span className="text-xl font-black text-rose-500 tracking-tight">{minIncome.toLocaleString()} <span className="text-xs text-rose-400 font-bold">บาท</span></span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const StatCard = ({ title, value, unit, icon: Icon, colorClass, borderColor }) => (
+            <div className={`glass-panel glass-panel-hover rounded-[2rem] p-6 flex flex-col justify-between h-full border-t-[5px] ${borderColor}`}>
+                <div className="flex items-center justify-between mb-4">
+                    <div className={`p-3 rounded-2xl ${colorClass.replace('text', 'bg').replace('600', '100').replace('500', '100')}/70 ${colorClass} shadow-sm`}>
+                        <Icon size={22} strokeWidth={2.5} />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-3 py-1 rounded-full shadow-sm">{unit}</span>
+                </div>
+                <div>
+                    <h3 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</h3>
+                    <div className="flex items-baseline">
+                        <span className="text-3xl font-extrabold text-slate-800 tracking-tight drop-shadow-sm">{value}</span>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const MonthlyOverviewChart = ({ data }) => {
+            const chartData = useMemo(() => {
+                const grouped = {};
+                data.forEach(item => {
+                    if (!grouped[item.monthStr]) {
+                        grouped[item.monthStr] = { month: item.monthStr, monthId: item.monthId, income: 0, weight: 0, sheets: 0, farmers: new Set() };
+                    }
+                    grouped[item.monthStr].income += item.numericIncome;
+                    grouped[item.monthStr].weight += item.numericWeight;
+                    grouped[item.monthStr].sheets += item.numericSheetCount;
+                    grouped[item.monthStr].farmers.add(item.uniqueKey);
+                });
+                return Object.values(grouped).map(g => ({ ...g, farmerCount: g.farmers.size })).sort((a,b) => a.monthId - b.monthId);
+            }, [data]);
+
+            if (chartData.length === 0) return null;
+
+            return (
+                <div className="glass-panel rounded-[2.5rem] p-8 mb-12 animate-fade-in relative overflow-hidden flex flex-col">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <div>
+                            <h3 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center drop-shadow-sm">
+                                <div className="w-1.5 h-7 bg-indigo-400 rounded-full mr-3 shadow-[0_0_10px_rgba(129,140,248,0.5)]"></div>
+                                ภาพรวมผลผลิตและรายได้รายเดือน
+                            </h3>
+                            <p className="text-slate-500 text-xs font-bold mt-1 uppercase tracking-[0.15em]">Aggregate Monthly Production</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center space-x-2 glass-input px-4 py-2 rounded-xl shadow-sm bg-white/80">
+                                <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full shadow-sm"></div>
+                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">รายได้รวม</span>
+                            </div>
+                            <div className="flex items-center space-x-2 glass-input px-4 py-2 rounded-xl shadow-sm bg-white/80">
+                                <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full shadow-sm"></div>
+                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">น้ำหนักรังไหม</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="h-[350px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorIncomeTotal" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.8}/>
+                                        <stop offset="100%" stopColor="#818cf8" stopOpacity={0.4}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.4)" />
+                                <XAxis dataKey="month" tick={{fontSize: 12, fontWeight: 600, fill: '#64748b'}} axisLine={false} tickLine={false} dy={10} />
+                                <YAxis yAxisId="incomeAxis" hide domain={[0, 'dataMax']} />
+                                <YAxis yAxisId="weightAxis" orientation="right" hide domain={[0, 'dataMax']} />
+                                <Tooltip 
+                                    cursor={{fill: 'rgba(226, 232, 240, 0.2)'}}
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            const d = payload[0].payload;
+                                            return (
+                                                <div className="recharts-default-tooltip">
+                                                    <p className="text-xs font-black text-slate-800 uppercase border-b border-slate-200/50 pb-2 mb-3 text-center tracking-wider">{label}</p>
+                                                    <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                                                        <div className="flex flex-col"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">รายได้</span><span className="text-sm font-black text-indigo-600">{d.income.toLocaleString()} บ.</span></div>
+                                                        <div className="flex flex-col"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">รังไหม</span><span className="text-sm font-black text-emerald-500">{d.weight.toLocaleString()} กก.</span></div>
+                                                        <div className="flex flex-col border-t border-slate-200/50 pt-2"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">เลี้ยงจริง</span><span className="text-sm font-black text-amber-500">{d.sheets.toLocaleString()} แผ่น</span></div>
+                                                        <div className="flex flex-col border-t border-slate-200/50 pt-2"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">เกษตรกร</span><span className="text-sm font-black text-slate-600">{d.farmerCount} ราย</span></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Bar yAxisId="incomeAxis" dataKey="income" radius={[12, 12, 0, 0]} barSize={45} fill="url(#colorIncomeTotal)" />
+                                <Line yAxisId="weightAxis" type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={5} dot={{r: 6, fill: '#10b981', strokeWidth: 3, stroke: '#fff'}} activeDot={{r: 9, strokeWidth: 0, shadow: '0 0 10px #10b981'}} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            );
+        };
+
+        const HallOfFame = ({ farmers }) => {
+            if (!farmers || farmers.length === 0) return null;
+            return (
+                <div className="mb-12 relative overflow-hidden rounded-[3rem] animate-fade-in-up glass-panel p-10 border-[3px] border-amber-200/50 shadow-[0_15px_40px_rgba(251,191,36,0.15)] bg-gradient-to-br from-white/60 to-amber-50/40">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-amber-300 rounded-full opacity-20 blur-[80px] -mr-32 -mt-32 pointer-events-none"></div>
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-300 rounded-full opacity-10 blur-[80px] -ml-32 -mb-32 pointer-events-none"></div>
+                    
+                    <div className="relative flex items-center justify-between mb-8 z-10">
+                        <div className="flex items-center space-x-6">
+                            <div className="relative animate-float">
+                                <div className="bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-500 p-4 rounded-3xl shadow-[0_10px_20px_rgba(245,158,11,0.4)] border border-amber-200 text-white">
+                                    <Star size={36} fill="white" stroke="white" />
+                                </div>
+                            </div>
+                            <div>
+                                <h2 className="text-3xl font-extrabold tracking-tight text-slate-800 leading-none mb-2 drop-shadow-sm">ทำเนียบยอดฝีมือ (Hall of Fame)</h2>
+                                <p className="text-amber-600 font-bold uppercase tracking-[0.2em] text-[10px]">Flawless Elite Performers</p>
+                            </div>
+                        </div>
+                        <div className="hidden md:flex bg-amber-50/90 backdrop-blur-md border border-amber-200 px-5 py-3 rounded-2xl text-[10px] font-bold text-amber-700 tracking-widest uppercase shadow-sm flex-col items-end">
+                            <span>เกณฑ์ผ่าน: เกรด A (>= 5000 บ./แผ่น) 100% ทุกรุ่นที่เลี้ยง</span>
+                            <span className="text-amber-500/80">(ขั้นต่ำ 3 รุ่นขึ้นไป)</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                        {farmers.map((f, i) => (
+                            <div key={i} className="group bg-white/70 backdrop-blur-xl p-6 rounded-[2rem] border border-amber-100 hover:border-amber-400/60 hover:bg-amber-50 transition-all duration-500 shadow-sm hover:shadow-md cursor-default">
+                                <div className="flex items-center space-x-5">
+                                    <div className="bg-gradient-to-br from-amber-100 to-amber-200 p-3.5 rounded-2xl text-amber-600 drop-shadow-sm group-hover:scale-110 transition-transform duration-300 border border-white">
+                                        <Award size={28} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-xl text-slate-800 leading-tight mb-1 truncate" title={f.name}>คุณ {f.name}</p>
+                                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-0.5">
+                                            {f.district} • <span className={f.mainType === 'รังเหลือง' ? 'text-amber-500' : 'text-indigo-500'}>{f.varietyLabel}</span>
+                                        </p>
+                                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">
+                                            ไร้ที่ติ 100% <span className="text-amber-600 font-black">({f.totalMonths} รุ่น)</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const GradeSummaryCard = ({ gradeData, isSelected, onClick }) => {
+            const cardStyle = isSelected 
+                ? { bg: gradeData.bg, border: gradeData.border, text: gradeData.textColor, shadow: 'shadow-[0_10px_30px_rgba(0,0,0,0.1)] scale-105 ring-4 ring-white/50' }
+                : { bg: 'glass-panel glass-panel-hover', border: 'border-transparent', text: 'text-slate-600', shadow: '' };
+
+            return (
+                <button 
+                    onClick={onClick} 
+                    className={`relative flex flex-col items-center justify-center p-6 rounded-[2rem] border transition-all duration-500 w-full group cursor-pointer
+                        ${cardStyle.bg} ${cardStyle.border} ${cardStyle.shadow}`}
+                >
+                    <div className="flex items-center space-x-2 mb-3 w-full justify-center">
+                        <div className={`p-2.5 rounded-xl ${isSelected ? 'bg-white/80 shadow-sm' : gradeData.bg} ${gradeData.textColor}`}>
+                            <Users size={20} strokeWidth={2.5} />
+                        </div>
+                        <span className={`text-lg font-bold tracking-tight ${isSelected ? gradeData.textColor : 'text-slate-700'}`}>{gradeData.label}</span>
+                    </div>
+                    <div className="flex items-baseline mb-1">
+                        <span className={`text-4xl font-extrabold tracking-tight ${isSelected ? gradeData.textColor : 'text-slate-800'}`}>{gradeData.value}</span>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest ml-1">ราย</span>
+                    </div>
+                    <div className={`mt-4 pt-4 border-t w-full flex flex-col items-center ${isSelected ? 'border-white/50' : 'border-slate-200/50'}`}>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest mb-1.5 ${isSelected ? gradeData.textColor : 'text-slate-500'}`}>{gradeData.desc}</span>
+                        <span className={`text-[9px] font-bold px-4 py-1.5 rounded-full ${isSelected ? 'bg-white/80 text-slate-800 shadow-sm' : 'bg-slate-100/50 text-slate-600'}`}>{gradeData.range}</span>
+                    </div>
+                </button>
+            );
+        };
+
+        const ContinuitySummaryCard = ({ cropCount, farmerCount, isSelected, onClick }) => {
+            const isHighContinuity = cropCount >= 4;
+            const cardColor = isSelected 
+                ? (isHighContinuity ? 'bg-indigo-500 text-white border-indigo-400 shadow-[0_10px_30px_rgba(99,102,241,0.3)]' : 'bg-violet-500 text-white border-violet-400 shadow-[0_10px_30px_rgba(139,92,246,0.3)]') 
+                : 'glass-panel glass-panel-hover text-slate-700 border-transparent';
+            const iconColor = isSelected ? 'text-white' : 'text-indigo-400';
+            
+            return (
+                <button 
+                    onClick={onClick} 
+                    className={`relative flex flex-col items-center justify-center p-5 rounded-[1.5rem] border transition-all duration-300 w-full group cursor-pointer ${cardColor} ${isSelected ? 'scale-105 ring-4 ring-white/50' : ''}`}
+                >
+                    <div className="flex items-center space-x-2 mb-2 w-full justify-center">
+                        <div className={`${iconColor}`}>
+                            <Layers size={18} strokeWidth={2.5} />
+                        </div>
+                        <span className={`text-sm font-bold tracking-tight`}>เลี้ยง {cropCount} รุ่น</span>
+                    </div>
+                    <div className="flex items-baseline">
+                        <span className={`text-3xl font-extrabold tracking-tight`}>{farmerCount}</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ml-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>ราย</span>
+                    </div>
+                </button>
+            );
+        };
+
+        const FarmerModal = ({ farmerObj, allData, onClose }) => {
+            const farmerHistory = useMemo(() => {
+                return allData.filter(d => d.uniqueKey === farmerObj.id).sort((a, b) => (a.fiscalYear * 100 + a.monthId) - (b.fiscalYear * 100 + b.monthId)).map(item => ({ ...item, displayLabel: `${item.monthStr} (${item.variety})` }));
+            }, [farmerObj, allData]);
+
+            const stats = useMemo(() => {
+                const totalSheets = farmerHistory.reduce((s, d) => s + d.numericSheetCount, 0);
+                const avgSheets = farmerHistory.length > 0 ? (totalSheets / farmerHistory.length).toFixed(1) : 0;
+                if (farmerHistory.length < 2) return { status: 'stable', diff: 0, totalSheets, avgSheets, avgPrice: farmerHistory[0]?.numericIncomePerSheet || 0 };
+                const last = farmerHistory[farmerHistory.length - 1].numericIncomePerSheet;
+                const prev = farmerHistory[farmerHistory.length - 2].numericIncomePerSheet;
+                const diff = last - prev;
+                return { status: diff > 0 ? 'up' : diff < 0 ? 'down' : 'stable', diff: Math.abs(diff).toFixed(0), avgPrice: (farmerHistory.reduce((s, d) => s + d.numericIncomePerSheet, 0) / farmerHistory.length).toFixed(0), totalSheets, avgSheets };
+            }, [farmerHistory]);
+
+            if (!farmerObj) return null;
+
+            return (
+                <>
+                    <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md animate-fade-in" onClick={onClose}></div>
+                    <div 
+                        className="absolute left-1/2 z-[101] w-full max-w-4xl px-4 animate-slide-up"
+                        style={{ top: farmerObj.clickY ? `${farmerObj.clickY}px` : '50vh', transform: 'translate(-50%, -50%)' }}
+                    >
+                        <div className="glass-panel bg-white/85 rounded-[3rem] shadow-2xl w-full overflow-hidden flex flex-col border border-white" style={{ maxHeight: '85vh' }}>
+                            <div className="p-8 border-b border-slate-200/50 bg-white/40 sticky top-0 z-10 shrink-0 backdrop-blur-xl flex justify-between items-center">
+                                <div className="flex items-center space-x-5">
+                                    <div className="p-3.5 bg-gradient-to-br from-indigo-400 to-indigo-600 text-white rounded-2xl shadow-lg"><Activity size={24} strokeWidth={2.5} /></div>
+                                    <div><h2 className="text-2xl font-bold text-slate-800 tracking-tight leading-none mb-1.5">คุณ {farmerObj.name}</h2><p className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em]">Efficiency Historical Analysis</p></div>
+                                </div>
+                                <button onClick={onClose} className="p-3 bg-white/50 hover:bg-white rounded-2xl text-slate-400 hover:text-rose-500 transition-all shadow-sm border border-white"><X size={24} /></button>
+                            </div>
+                            
+                            <div className="p-8 overflow-y-auto no-scrollbar flex-grow text-sm">
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                                    {[
+                                        {l:'เฉลี่ย/แผ่น', v:`${Number(stats.avgPrice).toLocaleString()} บ.`, i:DollarSign, c:'text-indigo-600'}, 
+                                        {l:'เลี้ยงรวม', v:`${stats.totalSheets} แผ่น`, i:Package, c:'text-slate-700'}, 
+                                        {l:'เฉลี่ยต่อรอบ', v:`${stats.avgSheets} แผ่น`, i:Leaf, c:'text-emerald-600'}, 
+                                        {l:'เทรนด์ล่าสุด', v:`${stats.status==='up'?'+':stats.status==='down'?'-':''}${Number(stats.diff).toLocaleString()} บ.`, i:stats.status==='up'?TrendingUp:TrendingDown, c:stats.status==='up'?'text-emerald-600':'text-rose-600'}
+                                    ].map((s,i)=>(
+                                        <div key={i} className="bg-white/60 backdrop-blur-lg p-5 rounded-3xl border border-white shadow-sm text-center flex flex-col items-center">
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">{s.l}</span>
+                                            <span className={`text-xl font-extrabold tabular-nums tracking-tight ${s.c}`}>{s.v}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="bg-white/60 backdrop-blur-lg p-8 rounded-[2.5rem] border border-white shadow-sm">
+                                    <ResponsiveContainer width="100%" height={320}>
+                                        <ComposedChart data={farmerHistory} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.6)" />
+                                            <XAxis dataKey="displayLabel" tick={{fontSize: 10, fontWeight: 600, fill: '#64748b'}} axisLine={false} tickLine={false} interval={0} angle={-15} textAnchor="end" dy={10} />
+                                            <YAxis hide domain={[0, 'dataMax']} />
+                                            <Tooltip 
+                                                cursor={{fill: 'rgba(226, 232, 240, 0.2)'}}
+                                                content={({ active, payload, label }) => {
+                                                    if (active && payload && payload.length) {
+                                                        const d = payload[0].payload;
+                                                        return (
+                                                            <div className="recharts-default-tooltip">
+                                                                <p className="font-black text-slate-700 uppercase border-b border-slate-200/50 pb-2 mb-2.5 tracking-wider">{label}</p>
+                                                                <div className="space-y-2">
+                                                                    <div className="flex justify-between gap-8"><span className="text-slate-500 text-[10px] font-bold tracking-widest">คุณภาพ:</span><span className="font-black text-indigo-600">{d.numericIncomePerSheet.toLocaleString()} บาท/แผ่น</span></div>
+                                                                    <div className="flex justify-between gap-8"><span className="text-slate-500 text-[10px] font-bold tracking-widest">เลี้ยงจริง:</span><span className="font-black text-slate-700">{d.numericSheetCount} แผ่น</span></div>
+                                                                    <div className="flex justify-between gap-8 border-t border-slate-200/50 pt-2"><span className="text-slate-500 text-[10px] font-bold tracking-widest">รวมรายได้:</span><span className="font-black text-emerald-600">{d.numericIncome.toLocaleString()} บาท</span></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
+                                            />
+                                            <Bar dataKey="numericIncomePerSheet" radius={[12, 12, 0, 0]} barSize={40}>
+                                                {farmerHistory.map((e, idx) => <Cell key={idx} fill={calculateGrade(e.numericIncomePerSheet).color} opacity={0.3} />)}
+                                            </Bar>
+                                            <Line type="monotone" dataKey="numericIncomePerSheet" stroke="#6366f1" strokeWidth={4} dot={{r: 5, fill: '#6366f1', strokeWidth: 3, stroke: '#fff'}} activeDot={{r: 8, strokeWidth: 0, shadow: '0 0 10px #6366f1'}} />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            );
+        };
+
+        const NameInspectorModal = ({ inspectorData, allData, onClose }) => {
+            const [activeTab, setActiveTab] = useState('suspects'); 
+
+            const uniqueList = useMemo(() => {
+                const map = new Map();
+                allData.forEach(d => {
+                    if (!map.has(d.uniqueKey)) {
+                        map.set(d.uniqueKey, { key: d.uniqueKey, name: d.fullName, district: d.district, months: new Set([d.monthStr]), rows: [d.rowNumber] });
+                    } else {
+                        map.get(d.uniqueKey).months.add(d.monthStr);
+                        map.get(d.uniqueKey).rows.push(d.rowNumber);
+                    }
+                });
+                return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'th'));
+            }, [allData]);
+
+            const suspectsList = useMemo(() => {
+                const byLastName = {};
+                const byFirstName = {};
+                
+                allData.forEach(d => {
+                    const clnLast = (d.rawLastName || '').replace(/[^ก-๙a-zA-Z0-9]/g, '');
+                    const clnFirst = (d.rawFirstName || '').replace(/[^ก-๙a-zA-Z0-9]/g, '');
+                    if (!clnLast || !clnFirst) return;
+
+                    if (!byLastName[clnLast]) byLastName[clnLast] = new Map();
+                    if (!byLastName[clnLast].has(d.uniqueKey)) {
+                        byLastName[clnLast].set(d.uniqueKey, { key: d.uniqueKey, fullName: d.fullName, district: d.district, months: new Set([d.monthStr]), rows: [d.rowNumber] });
+                    } else {
+                        byLastName[clnLast].get(d.uniqueKey).months.add(d.monthStr);
+                        if (!byLastName[clnLast].get(d.uniqueKey).rows.includes(d.rowNumber)) byLastName[clnLast].get(d.uniqueKey).rows.push(d.rowNumber);
+                    }
+
+                    if (!byFirstName[clnFirst]) byFirstName[clnFirst] = new Map();
+                    if (!byFirstName[clnFirst].has(d.uniqueKey)) {
+                        byFirstName[clnFirst].set(d.uniqueKey, { key: d.uniqueKey, fullName: d.fullName, district: d.district, months: new Set([d.monthStr]), rows: [d.rowNumber] });
+                    } else {
+                        byFirstName[clnFirst].get(d.uniqueKey).months.add(d.monthStr);
+                        if (!byFirstName[clnFirst].get(d.uniqueKey).rows.includes(d.rowNumber)) byFirstName[clnFirst].get(d.uniqueKey).rows.push(d.rowNumber);
+                    }
+                });
+
+                const groups = [];
+                Object.keys(byLastName).forEach(ln => {
+                    const people = Array.from(byLastName[ln].values());
+                    if (people.length > 1) groups.push({ type: 'นามสกุลคล้ายกัน (แต่ชื่อต่างกัน)', keyword: ln, people: people, color: 'rose' });
+                });
+                Object.keys(byFirstName).forEach(fn => {
+                    const people = Array.from(byFirstName[fn].values());
+                    if (people.length > 1) groups.push({ type: 'ชื่อคล้ายกัน (แต่นามสกุลต่างกัน)', keyword: fn, people: people, color: 'amber' });
+                });
+                return groups;
+            }, [allData]);
+
+            if (!inspectorData) return null;
+
+            return (
+                <>
+                    <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md animate-fade-in" onClick={onClose}></div>
+                    <div 
+                        className="absolute left-1/2 z-[101] w-full max-w-5xl px-4 animate-slide-up"
+                        style={{ top: inspectorData.clickY ? `${inspectorData.clickY}px` : '50vh', transform: 'translate(-50%, -50%)' }}
+                    >
+                        <div className="glass-panel bg-white/90 rounded-[3rem] shadow-2xl w-full overflow-hidden flex flex-col border border-white" style={{ maxHeight: '85vh' }}>
+                            <div className="p-8 border-b border-slate-200/50 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/50 backdrop-blur-xl sticky top-0 z-10 shrink-0">
+                                <div className="flex items-center space-x-5">
+                                    <div className="p-3.5 bg-gradient-to-br from-rose-400 to-rose-600 text-white rounded-2xl shadow-lg"><Search size={24} strokeWidth={2.5} /></div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-800 tracking-tight leading-none mb-1.5">วิเคราะห์หาจุดพิมพ์ผิด (ข้อมูลซ้ำ)</h2>
+                                        <p className="text-slate-500 font-bold text-[9px] uppercase tracking-[0.2em]">AI Cross-Month Data Analyzer</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex bg-slate-200/50 p-1.5 rounded-xl border border-slate-200/50 shadow-inner">
+                                    <button onClick={() => setActiveTab('suspects')} className={`px-5 py-2.5 rounded-lg text-[11px] font-bold transition-all uppercase tracking-widest ${activeTab === 'suspects' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                        ⚠️ วิเคราะห์จุดผิดปกติ ({suspectsList.length} กลุ่ม)
+                                    </button>
+                                    <button onClick={() => setActiveTab('all')} className={`px-5 py-2.5 rounded-lg text-[11px] font-bold transition-all uppercase tracking-widest ${activeTab === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                        📋 รายชื่อทั้งหมด ({uniqueList.length} ราย)
+                                    </button>
+                                </div>
+                                <button onClick={onClose} className="p-3 bg-white hover:bg-slate-50 rounded-2xl text-slate-400 hover:text-rose-500 transition-all shadow-sm border border-slate-100 absolute top-8 right-8"><X size={24} /></button>
+                            </div>
+
+                            <div className="p-8 overflow-y-auto no-scrollbar flex-grow text-sm">
+                                {activeTab === 'suspects' ? (
+                                    <div>
+                                        <div className="bg-rose-50/80 backdrop-blur-md border border-rose-200/50 p-6 rounded-3xl mb-8 flex items-start gap-4 shadow-sm">
+                                            <AlertCircle className="text-rose-500 flex-shrink-0 mt-0.5" size={24} />
+                                            <div>
+                                                <h4 className="font-bold text-rose-800 mb-1.5 text-base tracking-tight">ระบบพบข้อมูล {suspectsList.length} กลุ่มที่น่าสงสัยว่าจะเป็นคนเดียวกัน</h4>
+                                                <p className="text-rose-600/80 text-xs leading-relaxed">ให้ดูที่ <b>📍 บรรทัดที่ใน Sheets</b> หากพบว่าเป็นคนเดียวกันจริงๆ ให้กลับไปแก้ที่ Google Sheets ในบรรทัดนั้นให้คอลัมน์ <b>ชื่อ (F)</b> และ <b>นามสกุล (G)</b> สะกดเหมือนกันเป๊ะๆ ครับ</p>
+                                            </div>
+                                        </div>
+
+                                        {suspectsList.length === 0 ? (
+                                            <div className="text-center py-16 bg-white/50 rounded-3xl border border-white">
+                                                <CheckCircle size={56} className="mx-auto mb-4 text-emerald-400 opacity-60" strokeWidth={1.5} />
+                                                <p className="font-bold text-slate-500 text-lg tracking-tight">ไม่พบจุดน่าสงสัยว่าพิมพ์ชื่อผิดข้ามเดือนแล้ว</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-6">
+                                                {suspectsList.map((group, gIdx) => (
+                                                    <div key={gIdx} className="bg-white/60 backdrop-blur-lg border border-white rounded-3xl overflow-hidden shadow-sm">
+                                                        <div className={`bg-slate-50/50 px-6 py-4 border-b border-white font-bold text-slate-700 flex items-center gap-3 text-sm`}>
+                                                            <span className={`bg-${group.color}-100 text-${group.color}-600 px-3 py-1 rounded-lg text-[10px] uppercase tracking-widest shadow-sm border border-${group.color}-200/50`}>{group.type}</span> 
+                                                            คำที่ตรงกัน: <span className="text-slate-800 text-base">"{group.keyword}"</span>
+                                                        </div>
+                                                        <table className="w-full text-left border-collapse">
+                                                            <tbody>
+                                                                {group.people.map((p, pIdx) => (
+                                                                    <tr key={pIdx} className={`border-b border-slate-100/50 hover:bg-${group.color}-50/30 transition-colors`}>
+                                                                        <td className="py-5 px-6 w-1/3">
+                                                                            <div className="font-bold text-slate-800 text-base">คุณ {p.fullName}</div>
+                                                                            <div className={`text-[11px] text-${group.color}-600 font-bold mt-2 bg-white inline-block px-3 py-1 rounded-lg border border-${group.color}-200 shadow-sm uppercase tracking-widest`}>
+                                                                                📍 บรรทัดที่ใน Sheets: {p.rows.sort((a,b)=>a-b).join(', ')}
+                                                                            </div>
+                                                                            <div className="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">{p.district}</div>
+                                                                        </td>
+                                                                        <td className="py-5 px-6">
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {sortMonths(p.months).map(m => (
+                                                                                    <span key={m} className={`text-[10px] font-bold px-3 py-1.5 rounded-xl border bg-white text-slate-600 border-slate-200 shadow-sm`}>{m}</span>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl mb-6 text-xs font-bold text-slate-500 border border-white shadow-sm flex items-center gap-3 uppercase tracking-widest">
+                                            <span>💡</span> นี่คือรายชื่อทั้งหมด {uniqueList.length} ราย ที่ระบบประมวลผลได้ล่าสุด
+                                        </div>
+                                        <div className="bg-white/60 backdrop-blur-lg border border-white rounded-[2rem] overflow-hidden shadow-sm">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr className="border-b border-slate-200/60 bg-slate-50/50 text-slate-400 text-[10px] uppercase tracking-widest">
+                                                        <th className="py-4 px-6 w-16">ลำดับ</th>
+                                                        <th className="py-4 px-6">ชื่อที่ระบบอ่านได้ และ บรรทัดใน Sheets</th>
+                                                        <th className="py-4 px-6">เดือนที่มาขายรังไหม</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100/50">
+                                                    {uniqueList.map((item, idx) => (
+                                                        <tr key={item.key} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td className="py-5 px-6 text-slate-400 font-bold">{idx + 1}</td>
+                                                            <td className="py-5 px-6">
+                                                                <div className="font-bold text-slate-800 text-base">คุณ {item.name}</div>
+                                                                <div className="text-[10px] text-slate-500 font-bold mt-1.5 bg-white shadow-sm border border-slate-100 inline-block px-2.5 py-1 rounded-lg uppercase tracking-widest">
+                                                                    บรรทัด: {item.rows.sort((a,b)=>a-b).join(', ')}
+                                                                </div>
+                                                                <div className="text-[10px] text-slate-400 mt-1.5 uppercase tracking-widest">{item.district}</div>
+                                                            </td>
+                                                            <td className="py-5 px-6">
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {sortMonths(item.months).map(m => (
+                                                                        <span key={m} className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${m === 'มกราคม' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-white text-slate-500 border-slate-100 shadow-sm'}`}>
+                                                                            {m}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </>
+            );
+        };
+
+        const App = () => {
+            const [data, setData] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [fetchError, setFetchError] = useState(null); 
+            const [filters, setFilters] = useState({ variety: 'All', fiscalYear: 'All', month: 'All', district: 'All' });
+            const [searchQuery, setSearchQuery] = useState("");
+            
+            const [selectedGrade, setSelectedGrade] = useState(null);
+            const [selectedContinuity, setSelectedContinuity] = useState(null);
+            const [viewingFarmer, setViewingFarmer] = useState(null);
+            const [showInspector, setShowInspector] = useState(null);
+
+            const parseCSV = (csvText) => {
+                const lines = csvText.trim().split('\n');
+                return lines.slice(1).map((line, index) => {
+                    const excelRowNumber = index + 2; 
+                    const vals = []; let current = ''; let inQuotes = false;
+                    for (let i = 0; i < line.length; i++) {
+                        if (line[i] === '"') inQuotes = !inQuotes;
+                        else if (line[i] === ',' && !inQuotes) { vals.push(current.trim().replace(/^"|"$/g, '')); current = ''; }
+                        else current += line[i];
+                    }
+                    vals.push(current.trim().replace(/^"|"$/g, ''));
+                    
+                    const firstName = (vals[5] || '').trim();
+                    const lastName = (vals[6] || '').trim();
+                    
+                    if (!firstName && !lastName) return null; 
+                    
+                    const cleanFullName = `${firstName} ${lastName}`.replace(/\s+/g, ' ').trim();
+                    const uniqueKey = `${firstName}${lastName}`.replace(/\s+/g, '');
+                    
+                    if (!uniqueKey) return null;
+
+                    const mStr = vals[1] || ''; 
+                    const yStr = vals[2] || '0'; 
+                    const incPB = cleanNumber(vals[20]); 
+                    const mId = MONTH_MAP[mStr] || 0;
+                    let fy = parseInt(yStr) || 0; 
+                    if (mId >= 10) fy += 1;
+
+                    const varietyRaw = vals[8] || '-';
+                    const variety = varietyRaw.replace(/\s/g, ''); // กำจัดช่องว่างเพื่อให้ตัวกรองทำงานแม่นยำ
+                    const cocoonType = variety.includes('เหลืองสระบุรี') ? 'รังเหลือง' : 'รังขาว';
+                    
+                    const rawWeight = cleanNumber(vals[17]);
+                    const rawCount = cleanNumber(vals[9]);
+                    
+                    let sheetCount = 0;
+                    let incomePerSheet = 0;
+                    let weightPerSheet = 0;
+
+                    // === Data Normalization (แปลงฐานข้อมูลให้เป็นต่อแผ่น) ===
+                    if (cocoonType === 'รังเหลือง') {
+                        sheetCount = rawCount;
+                        incomePerSheet = incPB;
+                        weightPerSheet = sheetCount > 0 ? rawWeight / sheetCount : 0;
+                    } else {
+                        sheetCount = rawCount * 2;
+                        incomePerSheet = incPB / 2;
+                        weightPerSheet = sheetCount > 0 ? rawWeight / sheetCount : 0;
+                    }
+
+                    return {
+                        rowNumber: excelRowNumber, uniqueKey, fullName: cleanFullName, rawFirstName: firstName, rawLastName: lastName, district: vals[3] || 'ไม่ระบุ', 
+                        monthStr: mStr, yearStr: yStr, monthId: mId, fiscalYear: fy, variety: variety, cocoonType: cocoonType,
+                        numericBoxCount: rawCount, numericSheetCount: sheetCount, numericIncomePerBox: incPB, numericIncomePerSheet: incomePerSheet, 
+                        numericIncome: cleanNumber(vals[21]), numericWeight: rawWeight, numericWeightPerSheet: weightPerSheet
+                    };
+                }).filter(d => d !== null);
+            };
+
+            useEffect(() => {
+                fetch(CSV_URL)
+                .then(r => { if (!r.ok) throw new Error(`การดึงข้อมูลล้มเหลว (รหัสสถานะ: ${r.status})`); return r.text(); })
+                .then(csvText => {
+                    if (csvText.toLowerCase().includes('<html')) throw new Error("ลิงก์ที่ระบุส่งคืนข้อมูลเป็นหน้าเว็บ (HTML) ไม่ใช่รูปแบบไฟล์ CSV");
+                    const parsedData = parseCSV(csvText);
+                    if (parsedData.length === 0) throw new Error("ไฟล์ CSV ว่างเปล่า หรือโครงสร้างข้อมูลไม่ตรงกับที่ระบบต้องการ");
+                    setData(parsedData); setLoading(false); setFetchError(null);
+                })
+                .catch(err => {
+                    console.error("Fetch Error: ", err);
+                    setData([]); setFetchError(err.message); setLoading(false);
+                });
+            }, []);
+
+            const filteredData = useMemo(() => data.filter(d => 
+                (filters.district === 'All' || d.district === filters.district) && 
+                (filters.fiscalYear === 'All' || d.fiscalYear === parseInt(filters.fiscalYear)) && 
+                (filters.month === 'All' || d.monthStr === filters.month) && 
+                (filters.variety === 'All' || d.variety === filters.variety) &&
+                (searchQuery === "" || d.fullName.toLowerCase().includes(searchQuery.toLowerCase()))
+            ), [data, filters, searchQuery]);
+
+            const stats = useMemo(() => {
+                const totalIncome = filteredData.reduce((sum, item) => sum + item.numericIncome, 0);
+                const totalWeight = filteredData.reduce((sum, item) => sum + item.numericWeight, 0);
+                
+                const totalCountUnits = filteredData.reduce((s, i) => s + i.numericSheetCount, 0);
+                const avgEff = totalCountUnits > 0 ? totalWeight / totalCountUnits : 0;
+                
+                const activeInMonth = new Set(filteredData.map(d => d.uniqueKey)).size;
+
+                const whiteData = filteredData.filter(d => d.cocoonType === 'รังขาว');
+                const yellowData = filteredData.filter(d => d.cocoonType === 'รังเหลือง');
+                const whiteAvgYield = whiteData.length ? whiteData.reduce((sum, d) => sum + d.numericIncomePerSheet, 0) / whiteData.length : 0;
+                const yellowAvgYield = yellowData.length ? yellowData.reduce((sum, d) => sum + d.numericIncomePerSheet, 0) / yellowData.length : 0;
+
+                return { totalIncome, totalWeight, avgEff, activeInMonth, whiteAvgYield, yellowAvgYield };
+            }, [filteredData]);
+
+            const continuityData = useMemo(() => {
+                const continuityMap = {};
+                filteredData.forEach(d => {
+                    if (!continuityMap[d.uniqueKey]) continuityMap[d.uniqueKey] = new Set();
+                    continuityMap[d.uniqueKey].add(d.monthStr);
+                });
+                const cropCountsMap = {};
+                Object.keys(continuityMap).forEach(key => {
+                    const crops = continuityMap[key].size;
+                    cropCountsMap[crops] = (cropCountsMap[crops] || 0) + 1;
+                });
+                const maxCrops = Math.max(0, ...Object.keys(cropCountsMap).map(Number));
+                return { farmerToCrops: continuityMap, distribution: cropCountsMap, maxCrops: maxCrops };
+            }, [filteredData]);
+
+            const aggregatedFarmers = useMemo(() => {
+                const map = {};
+                filteredData.forEach(d => {
+                    if (!map[d.uniqueKey]) {
+                        map[d.uniqueKey] = { uniqueKey: d.uniqueKey, fullName: d.fullName, district: d.district, variety: d.variety, cocoonType: d.cocoonType, totalIncome: 0, totalBoxes: 0, totalSheets: 0, sumIncomePerSheet: 0, count: 0, monthsSold: new Set() };
+                    }
+                    map[d.uniqueKey].totalIncome += d.numericIncome;
+                    map[d.uniqueKey].totalBoxes += d.numericBoxCount;
+                    map[d.uniqueKey].totalSheets += d.numericSheetCount;
+                    map[d.uniqueKey].sumIncomePerSheet += d.numericIncomePerSheet;
+                    map[d.uniqueKey].count += 1;
+                    map[d.uniqueKey].monthsSold.add(d.monthStr);
+                    map[d.uniqueKey].varietyLabel = d.variety;
+                });
+                return Object.values(map).map(f => {
+                    const avgIncomePerSheet = f.sumIncomePerSheet / f.count; 
+                    return { ...f, avgIncomePerSheet: avgIncomePerSheet, finalGrade: calculateGrade(avgIncomePerSheet).grade, cropCount: f.monthsSold.size };
+                }).sort((a, b) => b.avgIncomePerSheet - a.avgIncomePerSheet);
+            }, [filteredData]);
+
+            const uniqueOptions = useMemo(() => ({
+                districts: [...new Set(data.map(d => d.district))].filter(Boolean).sort(),
+                years: [...new Set(data.map(d => d.fiscalYear))].sort((a, b) => b - a),
+                months: [...new Set(data.map(d => d.monthStr))].sort((a,b) => MONTH_MAP[a] - MONTH_MAP[b])
+            }), [data]);
+
+            const starFarmers = useMemo(() => {
+                if (data.length === 0) return [];
+                
+                const grouped = {};
+                data.forEach(d => {
+                    if (!grouped[d.uniqueKey]) grouped[d.uniqueKey] = [];
+                    grouped[d.uniqueKey].push(d);
+                });
+
+                const stars = [];
+                Object.keys(grouped).forEach(key => {
+                    const records = grouped[key];
+                    if (records.length >= 3) {
+                        const isFlawless = records.every(d => {
+                            return d.numericIncomePerSheet >= 5000;
+                        });
+
+                        if (isFlawless) {
+                            const avgYield = records.reduce((s, d) => s + d.numericIncomePerSheet, 0) / records.length;
+                            stars.push({
+                                name: records[0].fullName,
+                                district: records[0].district,
+                                hitCount: records.length,
+                                totalMonths: records.length,
+                                avgYield: avgYield,
+                                varietyLabel: records[0].variety,
+                                mainType: records[0].cocoonType
+                            });
+                        }
+                    }
+                });
+
+                return stars.sort((a, b) => b.totalMonths - a.totalMonths || b.avgYield - a.avgYield).slice(0, 6);
+            }, [data]);
+
+            const activeFilterType = selectedGrade ? 'grade' : selectedContinuity ? 'continuity' : null;
+
+            if (loading) return <div className="h-screen flex flex-col items-center justify-center bg-transparent">
+                <div className="w-14 h-14 border-[5px] border-white/50 border-t-indigo-500 rounded-full animate-spin mb-6 shadow-lg"></div>
+                <div className="font-bold text-slate-500 tracking-widest text-[10px] uppercase animate-pulse bg-white/50 px-6 py-2 rounded-full backdrop-blur-md">กำลังโหลดข้อมูล...</div>
+            </div>;
+
+            if (fetchError) return (
+                <div className="h-screen flex flex-col items-center justify-center text-center px-6 bg-transparent">
+                    <div className="glass-panel rounded-[3rem] shadow-2xl max-w-xl w-full relative overflow-hidden p-12">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-rose-400 to-rose-600"></div>
+                        <AlertCircle size={64} className="text-rose-400 mx-auto mb-6 drop-shadow-md" strokeWidth={1.5} />
+                        <h2 className="text-2xl font-bold text-slate-800 mb-3 tracking-tight">ไม่สามารถเชื่อมต่อข้อมูลได้</h2>
+                        <p className="text-slate-500 mb-8 font-medium">{fetchError}</p>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col pb-20 relative">
+                    <header className="pt-16 pb-12 px-6 text-center relative z-10">
+                        <div className="inline-flex p-4 glass-panel text-indigo-500 rounded-[2rem] mb-6 shadow-sm"><Leaf size={36} strokeWidth={2.5} /></div>
+                        <h1 className="text-3xl lg:text-5xl font-extrabold text-slate-800 tracking-tight leading-tight mb-4 drop-shadow-sm uppercase">Sericulture Trading Analytics</h1>
+                        <p className="text-lg lg:text-xl text-indigo-600 font-bold max-w-3xl mx-auto mb-2">สถิติการซื้อขายรังไหม (เกษตรกรไหมอุตสาหกรรม)</p>
+                        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-2">ศูนย์หม่อนไหมเฉลิมพระเกียรติสมเด็จพระนางเจ้าสิริกิติ์ พระบรมราชินีนาถ มุกดาหาร</p>
+                    </header>
+
+                    <main className="max-w-7xl mx-auto px-6 w-full flex-grow relative z-20">
+                        
+                        {/* Filters & Global Search */}
+                        <div className="glass-panel p-8 rounded-[2.5rem] mb-12 flex flex-col gap-6 shadow-sm">
+                            
+                            {/* Search Box */}
+                            <div className="relative w-full max-w-2xl mx-auto">
+                                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                    <Search size={20} className="text-indigo-400" />
+                                </div>
+                                <input 
+                                    type="text" 
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    placeholder="ค้นหาข้อมูลจาก ชื่อ หรือ นามสกุล เกษตรกร..." 
+                                    className="w-full glass-input rounded-[1.5rem] pl-14 pr-6 py-4 text-base font-bold text-slate-700 outline-none transition-all shadow-sm focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+
+                            {/* Separator line */}
+                            <div className="w-full h-px bg-slate-200/50"></div>
+
+                            {/* Dropdowns */}
+                            <div className="flex flex-wrap gap-5 items-center justify-center">
+                                {['variety', 'fiscalYear', 'month', 'district'].map(f => (
+                                    <div key={f} className="flex flex-col min-w-[160px] flex-1">
+                                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-3">{f === 'fiscalYear' ? 'ปีงบประมาณ' : f === 'month' ? 'เดือน' : f === 'district' ? 'อำเภอ' : 'สายพันธุ์'}</label>
+                                        <select value={filters[f]} onChange={e => setFilters({...filters, [f]: e.target.value})} className="glass-input rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 outline-none transition-all cursor-pointer shadow-sm focus:bg-white focus:border-indigo-400">
+                                            <option value="All">แสดงทั้งหมด</option>
+                                            {f === 'variety' ? (
+                                                <>
+                                                    <option value="จุล1">จุล1</option>
+                                                    <option value="จุล6">จุล6</option>
+                                                    <option value="น่าน72">น่าน72</option>
+                                                    <option value="เหลืองสระบุรี">เหลืองสระบุรี</option>
+                                                </>
+                                            ) : uniqueOptions[f === 'fiscalYear' ? 'years' : f === 'month' ? 'months' : 'districts'].map(v => <option key={v} value={v}>{v}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Executive Summary */}
+                        <ExecutiveSummary data={filteredData} stats={stats} aggregatedFarmers={aggregatedFarmers} />
+
+                        {/* Top Stats */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                            <StatCard title="รายได้รวม (กลุ่มที่กรอง)" value={`${stats.totalIncome.toLocaleString()} บ.`} unit="บาท" icon={DollarSign} colorClass="text-indigo-500" borderColor="border-indigo-400" />
+                            <StatCard title="ปริมาณรับซื้อรังไหมรวม" value={`${stats.totalWeight.toLocaleString()} กก.`} unit="น้ำหนักสุทธิ" icon={Package} colorClass="text-emerald-500" borderColor="border-emerald-400" />
+                            <StatCard title="ประสิทธิภาพน้ำหนักรังไหม" value={`${stats.avgEff.toFixed(2)}`} unit="กก./แผ่น" icon={GaugeIcon} colorClass="text-violet-500" borderColor="border-violet-400" />
+                            <StatCard title="เกษตรกรที่มาขายจริง" value={`${stats.activeInMonth} ราย`} unit="ราย" icon={Users} colorClass="text-rose-500" borderColor="border-rose-400" />
+                        </div>
+
+                        {/* Charts Area */}
+                        <div className="mb-12">
+                            <MonthlyOverviewChart data={filteredData} />
+                        </div>
+
+                        {/* Hall of Fame */}
+                        <HallOfFame farmers={starFarmers} />
+
+                        {/* Continuity Section */}
+                        {continuityData.maxCrops > 0 && (
+                            <div className="mb-14 animate-fade-in-up">
+                                <div className="flex items-center justify-between mb-6 px-2">
+                                    <h3 className="text-xl font-bold text-slate-700 tracking-tight flex items-center">
+                                        <div className="w-1.5 h-6 bg-violet-400 rounded-full mr-3 shadow-sm"></div>
+                                        ความต่อเนื่องในการเลี้ยงไหม
+                                    </h3>
+                                    <div className="text-[9px] font-bold text-slate-500 bg-white/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white shadow-sm uppercase tracking-widest">
+                                        Rearing Continuity Filter
+                                    </div>
+                                </div>
+                                
+                                <div className="glass-panel p-6 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-6">
+                                    <div className="flex items-center space-x-5 w-full sm:w-auto">
+                                        <div className="p-4 bg-white/60 text-violet-600 rounded-2xl shadow-sm border border-white">
+                                            <Layers size={24} strokeWidth={2.5} />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-bold text-slate-700 mb-1">กรองรายชื่อตามความต่อเนื่อง</h4>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">1 เดือน = 1 รุ่นการเลี้ยง</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center w-full sm:w-auto space-x-6">
+                                        {selectedContinuity && (
+                                            <div className="hidden sm:block text-right pr-6 border-r border-slate-300/50 animate-fade-in">
+                                                <div className="text-2xl font-extrabold text-violet-600 tracking-tight leading-none drop-shadow-sm">{continuityData.distribution[selectedContinuity] || 0}</div>
+                                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">ราย</div>
+                                            </div>
+                                        )}
+                                        <select 
+                                            value={selectedContinuity || ""} 
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                if(val === "") { setSelectedContinuity(null); } 
+                                                else { setSelectedContinuity(Number(val)); setSelectedGrade(null); }
+                                            }} 
+                                            className="w-full sm:w-auto glass-input rounded-2xl px-6 py-3.5 text-sm font-bold text-slate-700 shadow-sm"
+                                        >
+                                            <option value="">-- แสดงข้อมูลทั้งหมด --</option>
+                                            {Array.from({length: continuityData.maxCrops}, (_, i) => continuityData.maxCrops - i).map(c => {
+                                                const count = continuityData.distribution[c] || 0;
+                                                if (count === 0) return null;
+                                                return <option key={c} value={c}>เลี้ยงต่อเนื่อง {c} รุ่น (จำนวน {count} ราย)</option>;
+                                            })}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Grade Highlights */}
+                        <div className="mb-12">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 px-2">
+                                <h3 className="text-xl font-bold text-slate-700 tracking-tight flex items-center">
+                                    <div className="w-1.5 h-6 bg-indigo-400 rounded-full mr-3 shadow-sm"></div>
+                                    สถานะการจัดเกรดเกษตรกร
+                                </h3>
+                                <div className="text-[9px] font-bold text-slate-500 bg-white/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white shadow-sm uppercase tracking-widest flex items-center gap-2">
+                                    <span>เกณฑ์ใหม่ : A {`>=5,000`} | B 4,000-4,999 | C 3,000-3,999 | D 500-2,999 (บ./แผ่น)</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {['A', 'B', 'C', 'D'].map(g => {
+                                    let dummyVal = 0;
+                                    if (g === 'A') dummyVal = 5000;
+                                    if (g === 'B') dummyVal = 4000;
+                                    if (g === 'C') dummyVal = 3000;
+                                    if (g === 'D') dummyVal = 500;
+
+                                    const info = calculateGrade(dummyVal);
+                                    const uniqueCount = aggregatedFarmers.filter(f => f.finalGrade === g).length;
+
+                                    return <GradeSummaryCard key={g} gradeData={{...info, value: uniqueCount, range: info.range}} isSelected={selectedGrade === g} 
+                                        onClick={() => { setSelectedGrade(selectedGrade === g ? null : g); setSelectedContinuity(null); }} 
+                                    />;
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Results Table Section */}
+                        {activeFilterType && (
+                            <div className="animate-fade-in-up glass-panel rounded-[2.5rem] overflow-hidden mb-12 relative">
+                                <div className="absolute top-8 right-8 z-20 flex gap-3">
+                                    <button 
+                                        onClick={() => { setSelectedGrade(null); setSelectedContinuity(null); }} 
+                                        className="flex items-center justify-center p-3.5 bg-white/80 hover:bg-rose-50 text-slate-400 hover:text-rose-500 rounded-2xl transition-all shadow-sm border border-white"
+                                        title="ปิดตาราง"
+                                    >
+                                        <X size={20} strokeWidth={2.5} />
+                                    </button>
+                                </div>
+
+                                <div className="px-10 py-10 border-b border-white/50 bg-white/30 flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-slate-800 tracking-tight leading-none mb-2.5">
+                                            {activeFilterType === 'grade' ? `รายชื่อเกษตรกร เกรด ${selectedGrade}` : `รายชื่อเกษตรกรที่เลี้ยงต่อเนื่อง ${selectedContinuity} รุ่น`}
+                                        </h3>
+                                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">Listing Filtered Farmers Result</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center space-x-3 bg-white/60 border border-white px-6 py-3.5 rounded-2xl font-bold text-[10px] text-indigo-600 uppercase tracking-widest shadow-sm">
+                                            <Activity size={18} strokeWidth={2.5} />
+                                            <span>คลิกที่ชื่อเพื่อดูประวัติย้อนหลัง</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse text-sm">
+                                        <thead>
+                                            <tr className="bg-white/40 text-slate-500 font-bold text-[10px] uppercase tracking-[0.3em] border-b border-white">
+                                                <th className="px-10 py-6">คุณ (นาย/นาง/นางสาว)</th>
+                                                <th className="px-10 py-6 text-center">เดือนที่ขายรังไหม (รุ่น)</th>
+                                                <th className="px-10 py-6 text-right">รายได้เฉลี่ย<br/><span className="text-[9px]">(บาท/แผ่น)</span></th>
+                                                <th className="px-10 py-6 text-right">จำนวน<br/><span className="text-[9px]">(แผ่น)</span></th>
+                                                <th className="px-10 py-6 text-right">รายได้รวม<br/><span className="text-[9px]">(บาท)</span></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/50">
+                                            {aggregatedFarmers
+                                                .filter(f => {
+                                                    if (activeFilterType === 'grade') return f.finalGrade === selectedGrade;
+                                                    if (activeFilterType === 'continuity') return f.cropCount === selectedContinuity;
+                                                    return false;
+                                                })
+                                                .map((f, i) => (
+                                                    <tr key={i} data-name={f.fullName} onClick={(e) => setViewingFarmer({ id: f.uniqueKey, name: f.fullName, clickY: e.pageY })} className="farmer-row hover:bg-white/60 cursor-pointer transition-all group border-l-0 hover:border-l-[10px] hover:border-indigo-400/80">
+                                                        <td className="px-10 py-7">
+                                                            <div className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors text-lg tracking-tight mb-2">คุณ {f.fullName}</div>
+                                                            <div className="flex items-center space-x-2 opacity-80">
+                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-white shadow-sm border border-slate-100 px-3 py-1 rounded-xl">{f.district}</span>
+                                                                <span className={`text-[10px] font-bold ${f.variety.includes('เหลือง') ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-indigo-500 bg-indigo-50 border-indigo-100'} border px-2.5 py-1 rounded-xl uppercase tracking-widest shadow-sm`}>{f.variety}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-10 py-7 text-center">
+                                                            <div className="flex flex-wrap justify-center gap-2 max-w-[220px] mx-auto">
+                                                                {sortMonths(f.monthsSold).map(m => (
+                                                                    <span key={m} className="text-[9px] font-bold px-3 py-1.5 bg-white text-violet-600 rounded-xl whitespace-nowrap shadow-sm border border-slate-100">{m}</span>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-10 py-7 text-right font-extrabold text-xl text-slate-700 tracking-tight tabular-nums">{Math.round(f.avgIncomePerSheet).toLocaleString()}</td>
+                                                        <td className="px-10 py-7 text-right font-bold text-slate-500 tabular-nums">{f.totalSheets}</td>
+                                                        <td className="px-10 py-7 text-right font-bold text-lg text-indigo-500/90 tabular-nums">{f.totalIncome.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="py-12 text-center mt-auto relative z-10 opacity-30">
+                        <p className="font-bold text-slate-400 text-[10px] tracking-[0.3em] uppercase">นายณัฐนนท์ สุขไพศาลสกุล • Sericulture Smart Dashboard</p>
+                    </footer>
+
+                    {viewingFarmer && <FarmerModal farmerObj={viewingFarmer} allData={data} onClose={() => setViewingFarmer(null)} />}
+                    {showInspector && <NameInspectorModal inspectorData={showInspector} allData={data} onClose={() => setShowInspector(null)} />}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
