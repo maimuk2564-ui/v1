@@ -161,6 +161,16 @@
             const minIncome = farmerIncomes.length > 0 ? Math.min(...farmerIncomes) : 0;
             const avgIncomePerFarmer = farmerIncomes.length > 0 ? stats.totalIncome / farmerIncomes.length : 0;
             
+            const monthMap = {};
+            data.forEach(d => {
+                if(!monthMap[d.monthStr]) monthMap[d.monthStr] = 0;
+                monthMap[d.monthStr] += d.numericWeight;
+            });
+            let bestMonth = "-";
+            if(Object.keys(monthMap).length > 0) {
+                bestMonth = Object.keys(monthMap).sort((a,b) => monthMap[b] - monthMap[a])[0];
+            }
+            
             return (
                 <div className="glass-panel p-8 rounded-[2.5rem] mb-12 flex flex-col lg:flex-row gap-8 items-center animate-fade-in-up shadow-[0_10px_30px_rgba(0,0,0,0.03)]">
                     <div className="bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-600 text-white p-6 rounded-[2rem] shrink-0 shadow-[0_15px_30px_rgba(99,102,241,0.3)] animate-float">
@@ -193,16 +203,19 @@
                         {/* === แถวที่ 2: สถิติรายได้รายบุคคล === */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5 border-t border-slate-200/60">
                             <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 shadow-sm flex flex-col justify-center transition-all hover:bg-indigo-50">
-                                <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Users size={12}/> รายได้เฉลี่ยต่อคน</span>
+                                <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Users size={12}/> รายได้เฉลี่ย</span>
                                 <span className="text-xl font-black text-indigo-600 tracking-tight">{Math.round(avgIncomePerFarmer).toLocaleString()} <span className="text-xs text-indigo-400 font-bold">บาท</span></span>
+                                <span className="text-[10px] text-indigo-400/80 mt-1 italic font-medium">(ต่อคน ต่อปี)</span>
                             </div>
                             <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50 shadow-sm flex flex-col justify-center transition-all hover:bg-emerald-50">
                                 <span className="block text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><TrendingUp size={12}/> รายได้สูงสุด (Top)</span>
                                 <span className="text-xl font-black text-emerald-600 tracking-tight">{maxIncome.toLocaleString()} <span className="text-xs text-emerald-500 font-bold">บาท</span></span>
+                                <span className="text-[10px] text-emerald-500/80 mt-1 italic font-medium">(ต่อคน ต่อปี)</span>
                             </div>
                             <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100/50 shadow-sm flex flex-col justify-center transition-all hover:bg-rose-50">
                                 <span className="block text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><TrendingDown size={12}/> รายได้ต่ำสุด</span>
                                 <span className="text-xl font-black text-rose-500 tracking-tight">{minIncome.toLocaleString()} <span className="text-xs text-rose-400 font-bold">บาท</span></span>
+                                <span className="text-[10px] text-rose-400/80 mt-1 italic font-medium">(ต่อคน ต่อปี)</span>
                             </div>
                         </div>
 
@@ -769,15 +782,17 @@
                 (filters.district === 'All' || d.district === filters.district) && 
                 (filters.fiscalYear === 'All' || d.fiscalYear === parseInt(filters.fiscalYear)) && 
                 (filters.month === 'All' || d.monthStr === filters.month) && 
-                (filters.variety === 'All' || d.variety === filters.variety) &&
-                (searchQuery === "" || d.fullName.toLowerCase().includes(searchQuery.toLowerCase()))
-            ), [data, filters, searchQuery]);
+                (filters.variety === 'All' || d.variety.replace(/\s/g, '') === filters.variety.replace(/\s/g, ''))
+            ), [data, filters]);
 
             const stats = useMemo(() => {
                 const totalIncome = filteredData.reduce((sum, item) => sum + item.numericIncome, 0);
                 const totalWeight = filteredData.reduce((sum, item) => sum + item.numericWeight, 0);
                 
-                const totalCountUnits = filteredData.reduce((s, i) => s + i.numericSheetCount, 0);
+                const totalCountUnits = filters.variety !== 'All' && !filters.variety.includes('เหลืองสระบุรี') 
+                    ? filteredData.reduce((s, i) => s + i.numericBoxCount, 0)
+                    : filteredData.reduce((s, i) => s + i.numericSheetCount, 0);
+                    
                 const avgEff = totalCountUnits > 0 ? totalWeight / totalCountUnits : 0;
                 
                 const activeInMonth = new Set(filteredData.map(d => d.uniqueKey)).size;
@@ -788,7 +803,7 @@
                 const yellowAvgYield = yellowData.length ? yellowData.reduce((sum, d) => sum + d.numericIncomePerSheet, 0) / yellowData.length : 0;
 
                 return { totalIncome, totalWeight, avgEff, activeInMonth, whiteAvgYield, yellowAvgYield };
-            }, [filteredData]);
+            }, [filteredData, filters.variety]);
 
             const continuityData = useMemo(() => {
                 const continuityMap = {};
@@ -890,7 +905,7 @@
                         <div className="inline-flex p-4 glass-panel text-indigo-500 rounded-[2rem] mb-6 shadow-sm"><Leaf size={36} strokeWidth={2.5} /></div>
                         <h1 className="text-3xl lg:text-5xl font-extrabold text-slate-800 tracking-tight leading-tight mb-4 drop-shadow-sm uppercase">Sericulture Trading Analytics</h1>
                         <p className="text-lg lg:text-xl text-indigo-600 font-bold max-w-3xl mx-auto mb-2">สถิติการซื้อขายรังไหม (เกษตรกรไหมอุตสาหกรรม)</p>
-                        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-2">ศูนย์หม่อนไหมเฉลิมพระเกียรติสมเด็จพระนางเจ้าสิริกิติ์ พระบรมราชินีนาถ มุกดาหาร</p>
+                        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-2 mb-2">ข้อมูลเฉพาะเกษตรกรที่ขายกับบริษัทจุลฯ</p>
                     </header>
 
                     <main className="max-w-7xl mx-auto px-6 w-full flex-grow relative z-20">
@@ -922,7 +937,7 @@
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                             <StatCard title="รายได้รวม (กลุ่มที่กรอง)" value={`${stats.totalIncome.toLocaleString()} บ.`} unit="บาท" icon={DollarSign} colorClass="text-indigo-500" borderColor="border-indigo-400" />
                             <StatCard title="ปริมาณรับซื้อรังไหมรวม" value={`${stats.totalWeight.toLocaleString()} กก.`} unit="น้ำหนักสุทธิ" icon={Package} colorClass="text-emerald-500" borderColor="border-emerald-400" />
-                            <StatCard title="ประสิทธิภาพน้ำหนักรังไหม" value={`${stats.avgEff.toFixed(2)}`} unit="กก./แผ่น" icon={GaugeIcon} colorClass="text-violet-500" borderColor="border-violet-400" />
+                            <StatCard title="ประสิทธิภาพน้ำหนักรังไหม" value={`${stats.avgEff.toFixed(2)}`} unit={filters.variety !== 'All' && !filters.variety.includes('เหลืองสระบุรี') ? 'กก./กล่อง' : 'กก./แผ่น'} icon={GaugeIcon} colorClass="text-violet-500" borderColor="border-violet-400" />
                             <StatCard title="เกษตรกรที่มาขายจริง" value={`${stats.activeInMonth} ราย`} unit="ราย" icon={Users} colorClass="text-rose-500" borderColor="border-rose-400" />
                         </div>
 
@@ -1076,6 +1091,7 @@
                                                     if (activeFilterType === 'continuity') return f.cropCount === selectedContinuity;
                                                     return false;
                                                 })
+                                                .filter(f => searchQuery === "" || f.fullName.toLowerCase().includes(searchQuery.toLowerCase()))
                                                 .map((f, i) => (
                                                     <tr key={i} data-name={f.fullName} onClick={(e) => setViewingFarmer({ id: f.uniqueKey, name: f.fullName, clickY: e.pageY })} className="farmer-row hover:bg-white/60 cursor-pointer transition-all group border-l-0 hover:border-l-[10px] hover:border-indigo-400/80">
                                                         <td className="px-10 py-7">
